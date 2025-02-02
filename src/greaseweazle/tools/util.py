@@ -286,6 +286,7 @@ image_types = OrderedDict(
       '.fdi': 'FDI',
       '.hdm': 'HDM',
       '.hfe': 'HFE',
+      '.ibmxdf': "IBMXDF",
       '.ima': 'IMG',
       '.img': 'IMG',
       '.imd': 'IMD',

@@ -781,20 +781,34 @@ class IBMTrack_Fixed(IBMTrack):
             t.iams = [IAM(pos*16,(pos+synclen)*16)]
             pos += synclen + gap1
 
-        id0 = config.id
+        sec_map_is_fixed = not isinstance(config.id, int)
         h = head if config.h is None else config.h
-        for sec in sec_map(nsec, config.interleave,
-                           config.cskew, config.hskew, cyl, head):
-            pos += t.gap_presync
-            idam = IDAM(pos*16, (pos+synclen+4+2)*16, 0xffff,
-                        c = cyl, h = h, r = id0+sec, n = sec_n(sec))
-            pos += synclen + 4 + 2 + gap2 + t.gap_presync
-            size = 128 << idam.n
-            datsz = size*2 if mark_dam == Mark.DAM_DEC_MMFM else size
-            dam = DAM(pos*16, (pos+synclen+size+2)*16, 0xffff,
-                      mark=mark_dam, data=b'-=[BAD SECTOR]=-'*(datsz//16))
-            t.sectors.append(Sector(idam, dam))
-            pos += synclen + size + 2 + gap3
+        if sec_map_is_fixed:
+            for sec_index in range(len(config.id)):
+                pos += t.gap_presync
+                idam = IDAM(pos*16, (pos+synclen+4+2)*16, 0xffff,
+                            c = cyl, h = h, r = config.id[sec_index], n = sec_n(sec_index))
+                pos += synclen + 4 + 2 + gap2 + t.gap_presync
+                size = 128 << idam.n
+                datsz = size*2 if mark_dam == Mark.DAM_DEC_MMFM else size
+                dam = DAM(pos*16, (pos+synclen+size+2)*16, 0xffff,
+                        mark=mark_dam, data=b'-=[BAD SECTOR]=-'*(datsz//16))
+                t.sectors.append(Sector(idam, dam))
+                pos += synclen + size + 2 + gap3
+        else:
+            id0 = config.id
+            for sec in sec_map(nsec, config.interleave,
+                               config.cskew, config.hskew, cyl, head):
+                pos += t.gap_presync
+                idam = IDAM(pos*16, (pos+synclen+4+2)*16, 0xffff,
+                            c = cyl, h = h, r = id0 + sec, n = sec_n(sec))
+                pos += synclen + 4 + 2 + gap2 + t.gap_presync
+                size = 128 << idam.n
+                datsz = size*2 if mark_dam == Mark.DAM_DEC_MMFM else size
+                dam = DAM(pos*16, (pos+synclen+size+2)*16, 0xffff,
+                        mark=mark_dam, data=b'-=[BAD SECTOR]=-'*(datsz//16))
+                t.sectors.append(Sector(idam, dam))
+                pos += synclen + size + 2 + gap3
 
         return t
 
@@ -845,7 +859,24 @@ class IBMTrack_FixedDef(codec.TrackDef):
             n = int(val)
             error.check(1 <= n <= 255, '%s out of range' % key)
             self.interleave = n
-        elif key in ['id', 'cskew', 'hskew']:
+        elif key == 'id':
+            ids = list()
+            for idrange in val.split(','):
+                m = re.match(r'(\d+)(-(\d+)(/(\d+))?)?$', idrange)
+                if m is None: raise ValueError()
+                if m.group(3) is None:
+                    s,e,step = int(m.group(1)), int(m.group(1)), 1
+                else:
+                    s,e,step = int(m.group(1)), int(m.group(3)), 1
+                    if m.group(5) is not None:
+                        step = int(m.group(5))
+                for i in range(s, e+1, step):
+                    ids.append(i)
+            if len(ids) == 1:
+                setattr(self, key, ids[0])
+            else:
+                setattr(self, key, ids)
+        elif key in ['cskew', 'hskew']:
             n = int(val, base=0)
             error.check(0 <= n <= 255, '%s out of range' % key)
             setattr(self, key, n)
